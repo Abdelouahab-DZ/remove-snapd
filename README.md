@@ -21,5 +21,4 @@ This script **permanently removes all Snap packages** and the Snap store from yo
 ---
 
 ## 📥 Installation & Setup
-chmod +x rm-snap.sh
-sudo ./rm-snap.sh
+chmod +x rm-snap.sh && sudo ./rm-snap.sh
