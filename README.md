@@ -1,16 +1,16 @@
-# Ubuntu Snap Remover Script 🛑
+# Ubuntu Snap Remover Script
 
-A robust bash script designed to completely purge Snap, snapd, and all associated snaps from an Ubuntu system, while setting up APT preferences to prevent it from ever accidentally reinstalling.
+A Bash script that removes Snap, snapd, and installed snaps from a Debian-based system, then adds an APT preference to prevent snapd from being installed accidentally.
 
 ---
 
 ## ✨ Features
 
-- **Service Disabling:** Gracefully stops and disables all background `snapd` systemd services.
-- **Recursive Removal:** Loops through and purges all installed snap packages (handling complex dependencies and runtimes) before removing the daemon.
-- **Deep Clean:** Cleans up leftover configuration files, caches, and system directories (`/snap`, `~/snap`, etc.).
-- **APT Pinning:** Creates an APT preference rule and places a hold on `snapd` to block future package updates or unintended reinstalls.
-- **Auto-Reboot:** Automatically reloads system daemons and reboots the system to finalize changes.
+- **Service disabling:** Stops and disables available `snapd` systemd services.
+- **Complete removal:** Removes installed snaps before purging the daemon and its unused dependencies.
+- **Cleanup:** Removes Snap data and cache directories.
+- **APT pinning:** Creates an APT preference rule that blocks future snapd installations.
+- **Safe default:** Does not reboot unless explicitly requested.
 
 ---
 
@@ -20,9 +20,24 @@ This script **permanently removes all Snap packages** and the Snap store from yo
 
 ---
 
-## 📥 Installation & Setup
-git clone https://github.com/Abdelouahab-DZ/remove-snapd
-###
+## Installation and usage
+
+```bash
+git clone https://github.com/Abdelouahab-DZ/remove-snapd.git
 cd remove-snapd
-###
-chmod +x rm-snap.sh && sudo ./rm-snap.sh
+chmod +x rm-snap.sh
+sudo ./rm-snap.sh
+```
+
+The script requires `apt-get`, `systemd`, and Bash. It must run as root or
+with `sudo` available. To reboot automatically after completion, opt in:
+
+```bash
+sudo ./rm-snap.sh --reboot
+```
+
+## Warning
+
+This permanently removes all Snap packages and their local data. Back up
+important application data before running the script. Applications installed
+only as snaps may need to be reinstalled from another source.
