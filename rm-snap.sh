@@ -1,39 +1,82 @@
 #!/usr/bin/env bash
 
-# Exit immediately if a command exits with a non-zero status
-set -e
+set -Eeuo pipefail
 
-echo "=== Disabling and stopping Snap services ==="
-sudo systemctl stop snapd.service snapd.socket snapd.seeded.service
-sudo systemctl disable snapd.service snapd.socket snapd.seeded.service
+REBOOT=false
 
-echo "=== Removing all installed Snaps (handling dependencies) ==="
-# Loop to remove apps first, then runtimes/cores
-while [ "$(snap list 2>/dev/null | wc -l)" -gt 0 ]; do
-    for snap in $(snap list 2>/dev/null | awk '!/^Name|^refreshed/ {print $1}'); do
-        sudo snap remove --purge "$snap" 2>/dev/null || true
-    done
+usage() {
+    cat <<'EOF'
+Usage: sudo ./rm-snap.sh [--reboot]
+
+Remove snapd and all installed snaps. The system is not rebooted unless
+--reboot is explicitly supplied.
+EOF
+}
+
+for arg in "$@"; do
+    case "$arg" in
+        --reboot) REBOOT=true ;;
+        --help|-h) usage; exit 0 ;;
+        *) echo "Unknown option: $arg" >&2; usage >&2; exit 2 ;;
+    esac
 done
 
+if [[ $EUID -eq 0 ]]; then
+    SUDO=()
+else
+    command -v sudo >/dev/null 2>&1 || {
+        echo "Error: this script must run as root or have sudo installed." >&2
+        exit 1
+    }
+    SUDO=(sudo)
+fi
+
+command -v apt-get >/dev/null 2>&1 || {
+    echo "Error: apt-get is required. This script supports Debian-based systems." >&2
+    exit 1
+}
+
+echo "=== Disabling and stopping Snap services ==="
+"${SUDO[@]}" systemctl stop snapd.service snapd.socket snapd.seeded.service 2>/dev/null || true
+"${SUDO[@]}" systemctl disable snapd.service snapd.socket snapd.seeded.service 2>/dev/null || true
+
+if command -v snap >/dev/null 2>&1; then
+    echo "=== Removing all installed snaps ==="
+    while mapfile -t snaps < <(snap list 2>/dev/null | awk 'NR > 1 && $1 != "" { print $1 }'); do
+        ((${#snaps[@]} == 0)) && break
+        removed=0
+        for snap_name in "${snaps[@]}"; do
+            if "${SUDO[@]}" snap remove --purge "$snap_name"; then
+                ((removed += 1))
+            fi
+        done
+        if ((removed == 0)); then
+            echo "Error: unable to remove the remaining snaps." >&2
+            exit 1
+        fi
+    done
+fi
+
 echo "=== Purging snapd from the system ==="
-sudo apt purge -y snapd
+"${SUDO[@]}" apt-get purge -y snapd
 
 echo "=== Cleaning up remaining leftovers ==="
-sudo apt autoremove --purge -y
-sudo rm -rf /snap /var/snap /var/lib/snapd /var/cache/snapd /usr/lib/snapd
-rm -rf ~/snap
+"${SUDO[@]}" apt-get autoremove --purge -y
+"${SUDO[@]}" rm -rf /snap /var/snap /var/lib/snapd /var/cache/snapd /usr/lib/snapd
+rm -rf "$HOME/snap"
 
 echo "=== Pinning APT to prevent Snap from reinstalling ==="
-sudo apt-mark hold snapd 2>/dev/null || true
-
-sudo tee /etc/apt/preferences.d/no-snap.pref << 'EOF'
+"${SUDO[@]}" tee /etc/apt/preferences.d/no-snap.pref >/dev/null <<'EOF'
 Package: snapd
 Pin: release a=*
 Pin-Priority: -10
 EOF
 
-echo "=== Reloading system daemon ==="
-sudo systemctl daemon-reload
+"${SUDO[@]}" systemctl daemon-reload
 
-echo "=== Process complete. Rebooting now... ==="
-sudo reboot
+if [[ $REBOOT == true ]]; then
+    echo "=== Process complete. Rebooting now... ==="
+    "${SUDO[@]}" reboot
+else
+    echo "=== Process complete. Reboot when convenient to finish applying changes. ==="
+fi
